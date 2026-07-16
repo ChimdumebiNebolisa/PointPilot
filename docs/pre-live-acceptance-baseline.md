@@ -9,7 +9,7 @@ This record preserves the automated baseline immediately before live microphone 
 - Final source identity: the commit referenced by the local annotated tag `pre-live-acceptance`.
 - Resolve the exact final commit with `git rev-parse pre-live-acceptance^{commit}`.
 - Package: `artifacts/PointPilot-win-x64.zip` (ignored; not committed).
-- Package SHA-256: `24D678E3C88CC3B05C0FAF8FC9565213BCC582C23257B3BAA957632DCFA759E6`.
+- Package SHA-256: `A12409B03676ABC59443643B41CB27C9480EE8DF4AF25F911246134F8CD7390C`.
 - Package size: 70,523,297 bytes.
 - Package entries: 478.
 - Recommended branch for evidence-driven live fixes: `test/live-gimp-acceptance`.
