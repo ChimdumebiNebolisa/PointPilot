@@ -23,7 +23,7 @@ Only `PointPilot.Infrastructure.Windows.WindowsInputExecutor` may call `SendInpu
 ```powershell
 npm ci
 npm run build:web
-dotnet restore PointPilot.sln --locked-mode
+dotnet restore PointPilot.sln --runtime win-x64 --locked-mode
 dotnet run --project src/PointPilot.App/PointPilot.App.csproj --configuration Debug
 dotnet build PointPilot.sln --configuration Release --no-restore
 dotnet test PointPilot.sln --configuration Release --no-restore

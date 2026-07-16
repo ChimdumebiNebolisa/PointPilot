@@ -24,7 +24,7 @@ A Git commit cannot contain its own final object ID without changing that ID. Th
 | npm restore | `npm ci` | PASS; 3 packages audited, 0 vulnerabilities |
 | TypeScript | `npm run typecheck` | PASS |
 | Web production build | `npm run build:web` | PASS |
-| NuGet restore | `dotnet restore PointPilot.sln --locked-mode` | PASS |
+| NuGet restore | `dotnet restore PointPilot.sln --runtime win-x64 --locked-mode` | PASS |
 | Format | `dotnet format PointPilot.sln --verify-no-changes --no-restore --severity warn` | PASS |
 | Release build | `dotnet build PointPilot.sln --configuration Release --no-restore` | PASS; 0 warnings, 0 errors |
 | Tests and coverage | `dotnet test PointPilot.sln --configuration Release --no-restore --collect:"XPlat Code Coverage"` | PASS; 28 passed, 0 failed, 0 skipped; 510/805 lines and 239/575 branches |

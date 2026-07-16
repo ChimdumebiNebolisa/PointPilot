@@ -17,9 +17,8 @@ try {
     npm ci
     npm run build:web
     if (Test-Path -LiteralPath $publish) { Remove-Item -LiteralPath $publish -Recurse -Force }
-    dotnet restore PointPilot.sln --locked-mode
+    dotnet restore PointPilot.sln --runtime win-x64 --locked-mode
     dotnet test PointPilot.sln --configuration $Configuration --no-restore
-    dotnet restore src/PointPilot.App/PointPilot.App.csproj --runtime win-x64 --locked-mode
     dotnet publish src/PointPilot.App/PointPilot.App.csproj --configuration $Configuration --runtime win-x64 --self-contained true --no-restore --output $publish
     Copy-Item LICENSE,THIRD_PARTY_NOTICES.md -Destination $publish -Force
     Get-ChildItem -LiteralPath $publish -Recurse -File -Filter "*.pdb" | Remove-Item -Force

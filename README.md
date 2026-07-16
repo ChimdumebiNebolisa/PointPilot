@@ -33,7 +33,7 @@ Copy-Item .env.example .env.local
 # Edit .env.local and set OPENAI_API_KEY. Do not quote or commit it.
 npm ci
 npm run build:web
-dotnet restore PointPilot.sln --locked-mode
+dotnet restore PointPilot.sln --runtime win-x64 --locked-mode
 dotnet test PointPilot.sln --configuration Release
 dotnet run --project src/PointPilot.App/PointPilot.App.csproj --configuration Release
 ```

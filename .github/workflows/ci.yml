@@ -22,7 +22,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build:web
-      - run: dotnet restore PointPilot.sln --locked-mode
+      - run: dotnet restore PointPilot.sln --runtime win-x64 --locked-mode
       - run: dotnet format PointPilot.sln --verify-no-changes --no-restore --severity warn
       - run: dotnet build PointPilot.sln --configuration Release --no-restore
       - run: dotnet test PointPilot.sln --configuration Release --no-restore --collect:"XPlat Code Coverage"

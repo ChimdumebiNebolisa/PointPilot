@@ -6,7 +6,7 @@
 npm ci
 npm run typecheck
 npm run build:web
-dotnet restore PointPilot.sln --locked-mode
+dotnet restore PointPilot.sln --runtime win-x64 --locked-mode
 dotnet format PointPilot.sln --verify-no-changes --no-restore --severity warn
 dotnet build PointPilot.sln --configuration Release --no-restore
 dotnet test PointPilot.sln --configuration Release --no-restore --collect:"XPlat Code Coverage"
