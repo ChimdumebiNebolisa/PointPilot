@@ -1,0 +1,36 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PointPilot.Core", "src\PointPilot.Core\PointPilot.Core.csproj", "{8E652978-7B43-4BD8-9110-D27465C05423}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PointPilot.Infrastructure", "src\PointPilot.Infrastructure\PointPilot.Infrastructure.csproj", "{98173066-24CB-4F0D-8681-D7A603513D77}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PointPilot.App", "src\PointPilot.App\PointPilot.App.csproj", "{3C922776-D47E-48B2-86E7-338990229DBA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PointPilot.Tests", "tests\PointPilot.Tests\PointPilot.Tests.csproj", "{74B16894-A56B-492F-A479-A1855D6789DE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8E652978-7B43-4BD8-9110-D27465C05423}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8E652978-7B43-4BD8-9110-D27465C05423}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8E652978-7B43-4BD8-9110-D27465C05423}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8E652978-7B43-4BD8-9110-D27465C05423}.Release|Any CPU.Build.0 = Release|Any CPU
+		{98173066-24CB-4F0D-8681-D7A603513D77}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{98173066-24CB-4F0D-8681-D7A603513D77}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{98173066-24CB-4F0D-8681-D7A603513D77}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{98173066-24CB-4F0D-8681-D7A603513D77}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3C922776-D47E-48B2-86E7-338990229DBA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3C922776-D47E-48B2-86E7-338990229DBA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3C922776-D47E-48B2-86E7-338990229DBA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3C922776-D47E-48B2-86E7-338990229DBA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{74B16894-A56B-492F-A479-A1855D6789DE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{74B16894-A56B-492F-A479-A1855D6789DE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{74B16894-A56B-492F-A479-A1855D6789DE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{74B16894-A56B-492F-A479-A1855D6789DE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

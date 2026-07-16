@@ -1,0 +1,19 @@
+.env
+.env.*
+!.env.example
+
+bin/
+obj/
+artifacts/
+node_modules/
+/dist/
+coverage/
+.vs/
+.idea/
+*.user
+*.suo
+*.nupkg
+TestResults/
+
+# PointPilot debug artifacts may contain screenshots or transcripts.
+debug-artifacts/
