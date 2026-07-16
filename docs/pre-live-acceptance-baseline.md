@@ -9,12 +9,11 @@ This record preserves the automated baseline immediately before live microphone 
 - Final source identity: the commit referenced by the local annotated tag `pre-live-acceptance`.
 - Resolve the exact final commit with `git rev-parse pre-live-acceptance^{commit}`.
 - Package: `artifacts/PointPilot-win-x64.zip` (ignored; not committed).
-- Package SHA-256: `386548A24CAF64195E72EE8EC44A6C9BBF5D4843F144129F1A3B87D4295A7336`.
-- Package size: 70,523,294 bytes.
+- Package SHA-256 and size: recorded in the annotated tag message; inspect them with `git tag -l pre-live-acceptance --format='%(contents)'`.
 - Package entries: 478.
 - Recommended branch for evidence-driven live fixes: `test/live-gimp-acceptance`.
 
-A Git commit cannot contain its own final object ID without changing that ID. The immutable tag reference above is therefore the canonical in-repository identity; the annotated tag message and handoff report record the literal tagged SHA.
+A Git commit cannot contain its own final object ID, or the hash of a commit-sensitive package containing its assemblies, without changing those values again. The immutable annotated tag is therefore the canonical in-repository identity for both the literal source SHA and package SHA-256.
 
 ## Automated evidence
 
