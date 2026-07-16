@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build:web
+      - run: dotnet restore PointPilot.sln --locked-mode
+      - run: dotnet format PointPilot.sln --verify-no-changes --no-restore --severity warn
+      - run: dotnet build PointPilot.sln --configuration Release --no-restore
+      - run: dotnet test PointPilot.sln --configuration Release --no-restore --collect:"XPlat Code Coverage"
+      - run: dotnet publish src/PointPilot.App/PointPilot.App.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/win-x64
+      - run: dotnet list PointPilot.sln package --vulnerable --include-transitive
+      - run: npm audit --audit-level=high
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PointPilot-win-x64
+          path: artifacts/publish/win-x64
