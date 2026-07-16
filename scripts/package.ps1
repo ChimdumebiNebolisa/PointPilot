@@ -27,7 +27,7 @@ try {
     $archive = [System.IO.Compression.ZipFile]::Open($zip, [System.IO.Compression.ZipArchiveMode]::Create)
     try {
         foreach ($file in Get-ChildItem -LiteralPath $publish -Recurse -File | Sort-Object FullName) {
-            $relative = [System.IO.Path]::GetRelativePath($publish, $file.FullName).Replace('\', '/')
+            $relative = $file.FullName.Substring($publish.Length).TrimStart([System.IO.Path]::DirectorySeparatorChar).Replace('\', '/')
             $entry = $archive.CreateEntry($relative, [System.IO.Compression.CompressionLevel]::Optimal)
             $entry.LastWriteTime = $timestamp
             $source = $file.OpenRead()
