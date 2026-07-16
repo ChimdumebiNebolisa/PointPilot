@@ -1,0 +1,47 @@
+version = 1
+
+[[skills]]
+name = "spec-kit"
+source_repository = "https://github.com/github/spec-kit"
+source_path = "templates"
+commit = "fd101d531eaec8a1e709db2f37632bc93b6ce4d6"
+installed_on = "2026-07-15"
+destination = ".agent/skills/spec-kit"
+retain_after_bootstrap = true
+notes = "Reviewed declarative templates only; no CLI or scripts installed."
+
+[[skills]]
+name = "vibe-security"
+source_repository = "https://github.com/raroque/vibe-security-skill"
+source_path = "vibe-security"
+commit = "850938f20f6915e7c3688d85c0a838f7909c87bb"
+installed_on = "2026-07-15"
+destination = ".agent/skills/vibe-security"
+retain_after_bootstrap = true
+[[skills]]
+name = "design-taste-frontend"
+source_repository = "https://github.com/Leonxlnx/taste-skill"
+source_path = "skills/taste-skill"
+commit = "b17742737e796305d829b3ad39eda3add0d79060"
+installed_on = "2026-07-15"
+destination = ".agent/skills/design-taste-frontend"
+retain_after_bootstrap = true
+notes = "Apply transferable visual, state, motion, and accessibility guidance to WPF; ignore React-specific defaults."
+
+[[skills]]
+name = "long-horizon-prompting"
+source_repository = "https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering"
+source_path = "skills/long-horizon-prompting"
+commit = "c578e85e40fe2bda7c1fec91ff64cf5285434934"
+installed_on = "2026-07-15"
+destination = ".agent/skills/long-horizon-prompting"
+retain_after_bootstrap = true
+
+[[skills]]
+name = "code-review-expert"
+source_repository = "https://github.com/sanyuan0704/sanyuan-skills"
+source_path = "skills/code-review-expert"
+commit = "08b6572ef108f22d4e8a3ecf9182a4bbef097744"
+installed_on = "2026-07-15"
+destination = ".agent/skills/code-review-expert"
+retain_after_bootstrap = true
