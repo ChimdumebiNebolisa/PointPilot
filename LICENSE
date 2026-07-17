@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 Raynan Wuyep
+Copyright (c) 2026 PointPilot contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,8 +22,6 @@ SOFTWARE.
 
 ---
 
-This project incorporates concepts from MIT-licensed projects:
-  - farzaa/clicky (https://github.com/farzaa/clicky)
-  - Bitshank-2338/clicky-windows (https://github.com/Bitshank-2338/clicky-windows)
-Their respective copyright and permission notices are retained where their
-code is reused.
+This repository incorporates MIT-licensed Clacky and Clicky for Windows source.
+Their complete copyright and permission notices are retained in
+`THIRD_PARTY_NOTICES.md`.
