@@ -1,131 +1,37 @@
-# Clacky 🧤
+# PointPilot
 
-**Clicky for Windows — open source. Talk to your PC — she sees your screen, points at things, and actually does them.**
+PointPilot is a compact, voice-first Windows companion. Start one session and
+ask follow-up questions about the application in front of you. It can explain
+what is visible, point to the target window, guide one step, and perform one
+bounded, verified GIMP action when it can ground the request safely.
 
-🎬 **Demo & write-up:** [raynanwuyep.com/clacky](https://raynanwuyep.com/clacky) · ⬇ **[Download for Windows](https://github.com/Raynan00/clacky/releases/latest)**
+PointPilot is general-purpose for screen understanding and pointing. Foreground
+GIMP 3.x on Windows 11 is the only verified mutation environment in this
+release.
 
-Clacky is a voice-first desktop companion for Windows. Hold a hotkey, talk, and she:
-
-- **sees** your screen and answers questions about it,
-- **points** — a little buddy flies to whatever you're asking about (snaps to the real UI element, pixel-accurate),
-- **acts** — opens apps, clicks, types, runs multi-step tasks, using Claude Computer Use,
-- **remembers** you across sessions and **learns routines** you teach her by voice,
-- **tours** an app — "explain my screen" gives you a spoken, pointing walkthrough.
-
-Her brain is **Claude** (Sonnet 5 + Computer Use); voice via **Deepgram** streaming STT and free **Edge TTS**.
-
-### Where this fits
-
-|                        | macOS                      | Windows                       |
-|------------------------|----------------------------|-------------------------------|
-| **Closed (heyclicky)** | agent mode shipped         | waitlist only                 |
-| **Open source**        | OpenClicky has agent mode  | **empty — Clacky fills this** |
-
-Clicky is Mac-only. Clacky brings the same idea to the majority of desktops that can't run it — open and free.
-
-> ⚠️ **Early build, and honestly a bit rough.** The core loop — talk → see → point → act — works and is genuinely fun. But speech recognition isn't perfect, and the more advanced features (multi-step tasks, Gmail/Calendar, background research) are lightly tested. This is a "try it and tell me what breaks" release, not a finished product.
-
----
-
-## What works today
-
-**The voice companion — `clacky run`:**
-
-- Push-to-talk voice; an on-screen buddy that points at what you ask about.
-- *"What's on my screen?"* → a spoken answer, buddy points at the relevant thing.
-- *"Explain my screen"* / *"walk me through this"* → a teaching tour that points out several things, one at a time.
-- *"Open Notepad and type hello"*, *"click the Save button"*, *"go to YouTube"* → she acts on your machine.
-- *"Remember I prefer dark mode"*, *"save this as my morning routine"* → cross-session memory + learned routines.
-- *"Check my email"*, *"what's on my calendar"* → opens your logged-in web apps (or an opt-in Google API).
-- *"Go research X and tell me later"* → a background agent works while you keep talking — and **leaves you real files**, not just words (via an embedded [hermes-agent](https://github.com/nousresearch/hermes-agent) harness, on your same Claude key). Background agents can also use **any MCP server you connect** — `clacky connect notion` or `clacky connect composio` is a browser approve, and Composio alone brings **1000+ apps** — so tasks can end in your Notion, Sheets, or Slack, not just on disk. She opens what she delivers, and never claims a delivery she didn't make.
-- *"Save this as game time — open Steam and Elden Ring tutorials"* → skills are **SKILL.md files** ([agentskills.io](https://agentskills.io) standard) — editable, shareable, PR-able, and shared by both her foreground and background brains.
-
-**The file organizer — `clacky organize`:**
-
-- Tidies a folder from one LLM call; move-only and **fully reversible** with `clacky undo`.
-
-## Getting started (Windows 10/11)
-
-You'll need an **Anthropic API key** (Clacky's brain) and ideally a **Deepgram key**
-(fast, accurate voice — free tier; without it she falls back to slower local
-Whisper). A first-run setup wizard collects both — links included.
-
-### Option 1 — Download the app *(no Python needed)*
-
-1. Grab **`Clacky-v0.2.0-windows.zip`** from [**Releases**](https://github.com/Raynan00/clacky/releases/latest)
-2. Extract anywhere and run `Clacky.exe`
-   *(the exe is unsigned, so SmartScreen may warn on first run — "More info → Run anyway")*
-3. The setup wizard walks you through your keys
-4. **Hold `Ctrl+Alt+M`, say *"what's on my screen?"*, and release** 🧤
-
-### Option 2 — Run from source *(Python 3.11+)*
+## Run from source
 
 ```powershell
-git clone https://github.com/Raynan00/clacky.git
-cd clacky
-pip install -e ".[shell,claude]"
-clacky run
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+Copy-Item .env.example .env.local
+.\.venv\Scripts\pointpilot.exe
 ```
 
-Background agents — the ones that leave you files — are included by default.
-(One caveat: Hermes doesn't support Python 3.14 yet, so on 3.14 she falls
-back to spoken summaries until it does.)
+The standard OpenAI key remains in the ignored `.env.local` file and is used
+only by the native PointPilot host. It is not rendered, logged, or sent to a
+browser surface.
 
-Keys: let the wizard collect them, or copy `.env.example` → `clacky/shell/.env`:
+## Safety boundary
 
-```
-ANTHROPIC_API_KEY=sk-ant-...
-DEEPGRAM_API_KEY=...
-CLACKY_ACTIVE_LLM=claude
-```
+- One active task revision; speech and Escape invalidate stale work first.
+- Capture only the external foreground target; PointPilot does not target itself.
+- Mouse and keyboard mutation is restricted to foreground GIMP with unchanged
+  bounds and target-relative coordinates.
+- Screen/model text is untrusted data. Local validation controls every action.
+- PointPilot verifies a target screenshot change before claiming an action
+  completed. Export and overwrite requests stop for exact confirmation.
 
-Full setup, what to say, and troubleshooting: **[docs/USAGE.md](docs/USAGE.md)**.
+See `docs/clacky-provenance.md` for the pinned foundation and
+`THIRD_PARTY_NOTICES.md` for required attribution.
 
-### Just want the file organizer? (no voice, no keys)
-
-```powershell
-pip install -e .
-clacky organize ~/Desktop -p heuristic --dry-run   # preview, zero config
-clacky organize ~/Desktop                           # do it
-clacky undo                                          # reverse it
-```
-
-## A note on safety
-
-The **file organizer** is move-only and fully reversible (`clacky undo`). The **voice agent acts directly** — like Clicky, she does what you ask rather than nagging for permission — but she stops and hands back before genuinely irreversible, high-stakes actions (send, delete, buy). It's an early build acting on your real machine, so **watch her, and press `Esc` to stop at any time.**
-
-## Roadmap
-
-- ~~Learnable skills (SKILL.md)~~ — **shipped in v0.2**: skills use the same open [Agent Skills standard](https://agentskills.io) as Claude, Hermes, and OpenClaw — with Clacky's twist: you teach her by *voice*.
-- ~~Background agents that leave artifacts~~ — **shipped in v0.2**: "go research X" runs through an embedded [hermes-agent](https://github.com/nousresearch/hermes-agent) harness and hands you real files.
-- **Clacky Bridge (MCP)** — exposing her eyes and pointer as an MCP server, so *any* agent (Claude, OpenClaw, Hermes) can see and point at a Windows screen.
-- **Better desktop control** — opt-in shortcut/icon arrangement, more launcher coverage.
-
-Issues and PRs very welcome — **contributing a skill is a 5-minute PR** (see [CONTRIBUTING.md](CONTRIBUTING.md)). 🧤
-
-## Layout
-
-```
-clacky/
-  shell/        # the voice + screen companion (clacky run) — the main app
-    routing.py  #   intent routing: local fast-paths + Haiku router
-    tour.py     #   guided screen tour + pointing (inline [POINT] tags)
-    actions.py  #   computer-use agent, launchers, organizer, background agents
-  agent/        # computer-use actuation, permission model, safe file ops + undo
-  providers/    # Claude / OpenAI / Gemini / Ollama / heuristic, behind one interface
-  cli.py        # clacky organize / undo / run
-docs/           # USAGE.md (start here), plus design docs
-tests/          # headless tests with a fake provider
-packaging/      # PyInstaller entry (clacky.spec builds the .exe)
-organizer/      # early file-organizer prototype — superseded by clacky/, kept for its tests
-```
-
-## Credits & license
-
-Clacky is an independent project. It builds on ideas and open-source work from:
-
-- **Clicky** by [@farzaa](https://github.com/farzaa/clicky) — the original macOS screen-companion concept (MIT).
-- **Clicky for Windows** by [Bitshank-2338 / Shashank Singh](https://github.com/Bitshank-2338/clicky-windows) — the Python/PyQt6 Windows companion Clacky lifts its voice + pointing pipeline from (MIT).
-- **OpenClicky** by [@jasonkneen](https://github.com/jasonkneen/openclicky) — the actively maintained open-source Clicky with Agent Mode; design reference for how agent capabilities are structured (MIT, macOS/Swift).
-
-Clacky is released under the [MIT License](LICENSE). It is not affiliated with or endorsed by the above projects or Anthropic.
