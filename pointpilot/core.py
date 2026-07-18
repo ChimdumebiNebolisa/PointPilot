@@ -14,8 +14,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable, Iterable
 
-import mss
-from PIL import Image
 
 
 class SessionState(str, Enum):
@@ -192,6 +190,9 @@ class TargetInspector:
 
     def capture(self, lease: TargetLease) -> Screenshot:
         self.validate(lease, mutating=False)
+        import mss
+        from PIL import Image
+
         with mss.mss() as camera:
             image = camera.grab({"left": lease.left, "top": lease.top, "width": lease.width, "height": lease.height})
             pil = Image.frombytes("RGB", image.size, image.rgb)

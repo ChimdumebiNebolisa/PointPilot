@@ -3,6 +3,15 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+.pointpilot-venv/
+
+# Legacy generated output retained locally during the WPF-to-Python rewrite.
+artifacts/
+test-artifacts/
+TestResults/
+node_modules/
+src/
+tests/PointPilot.Tests/
 venv/
 *.egg-info/
 

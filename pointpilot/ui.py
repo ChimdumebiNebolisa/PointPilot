@@ -3,7 +3,7 @@ from __future__ import annotations
 import ctypes
 from dataclasses import dataclass
 
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import QObject, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QAction, QColor, QKeySequence, QPainter, QPen
 from PyQt6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPushButton, QStyle, QSystemTrayIcon, QTextEdit, QVBoxLayout, QWidget
 
@@ -20,6 +20,29 @@ STATE_COLORS = {
     "Error": "#b91c1c",
     "Idle": "#475569",
 }
+
+
+class GlobalHotkeys(QObject):
+    activate_requested = pyqtSignal()
+    stop_requested = pyqtSignal()
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._handles = []
+        try:
+            import keyboard
+
+            self._keyboard = keyboard
+            self._handles.append(keyboard.add_hotkey("ctrl+alt+space", self.activate_requested.emit, suppress=False))
+            self._handles.append(keyboard.add_hotkey("esc", self.stop_requested.emit, suppress=False))
+        except Exception:
+            self._keyboard = None
+
+    def close(self) -> None:
+        if self._keyboard:
+            for handle in self._handles:
+                self._keyboard.remove_hotkey(handle)
+        self._handles = []
 
 
 class PointerOverlay(QWidget):
@@ -66,6 +89,9 @@ class Companion(QWidget):
         self.controller.state_changed.connect(self._state)
         self.controller.detail_changed.connect(self._detail)
         self.controller.point_requested.connect(self.overlay.point_to)
+        self.hotkeys = GlobalHotkeys()
+        self.hotkeys.activate_requested.connect(self._show_companion)
+        self.hotkeys.stop_requested.connect(self.controller.escape)
         self._tray()
 
     def _build(self) -> None:
@@ -100,7 +126,12 @@ class Companion(QWidget):
         self.stop_button.setAccessibleName("Stop PointPilot")
         self.stop_button.clicked.connect(self.controller.stop)
         self.stop_button.setEnabled(False)
+        self.mute_button = QPushButton("Mute")
+        self.mute_button.setAccessibleName("Mute PointPilot microphone")
+        self.mute_button.setCheckable(True)
+        self.mute_button.toggled.connect(self._mute)
         buttons.addWidget(self.start_button)
+        buttons.addWidget(self.mute_button)
         buttons.addWidget(self.stop_button)
         layout.addLayout(buttons)
         self.setStyleSheet("QWidget { background: #f8fafc; color: #172033; } QPushButton { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: white; } QPushButton:disabled { color: #94a3b8; background: #f1f5f9; }")
@@ -130,8 +161,17 @@ class Companion(QWidget):
         self.stop_button.setEnabled(active)
         self.start_button.setEnabled(not active)
 
+    def _mute(self, muted: bool) -> None:
+        self.controller.mute(muted)
+        self.mute_button.setText("Unmute" if muted else "Mute")
+
     def _detail(self, message: str) -> None:
         self.details.setPlainText(message)
+
+    def _show_companion(self) -> None:
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
 
     def keyPressEvent(self, event) -> None:  # type: ignore[no-untyped-def]
         if event.key() == Qt.Key.Key_Escape:
@@ -139,3 +179,8 @@ class Companion(QWidget):
             event.accept()
             return
         super().keyPressEvent(event)
+
+    def closeEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+        self.hotkeys.close()
+        self.controller.stop()
+        super().closeEvent(event)

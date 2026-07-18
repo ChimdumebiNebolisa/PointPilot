@@ -89,6 +89,7 @@ class RealtimeVoice:
         self._model = os.environ.get("POINTPILOT_REALTIME_MODEL", "gpt-realtime-2.1")
         self._socket: websocket.WebSocketApp | None = None
         self._stopped = threading.Event()
+        self._muted = threading.Event()
         self._audio: queue.Queue[np.ndarray] = queue.Queue(maxsize=200)
         self._assistant_item: str | None = None
         self._played_ms = 0
@@ -107,9 +108,11 @@ class RealtimeVoice:
             self._socket.close()
 
     def mute(self, muted: bool) -> None:
-        self._on_event({"type": "muted", "muted": muted})
         if muted:
-            self._stopped.set()
+            self._muted.set()
+        else:
+            self._muted.clear()
+        self._on_event({"type": "muted", "muted": muted})
 
     def _run(self) -> None:
         url = "wss://api.openai.com/v1/realtime?model=" + self._model
@@ -133,7 +136,7 @@ class RealtimeVoice:
 
     def _record(self) -> None:
         def callback(indata: np.ndarray, _frames: int, _time: Any, status: Any) -> None:
-            if status or self._stopped.is_set() or not self._socket or not self._socket.sock or not self._socket.sock.connected:
+            if status or self._stopped.is_set() or self._muted.is_set() or not self._socket or not self._socket.sock or not self._socket.sock.connected:
                 return
             self._send({"type": "input_audio_buffer.append", "audio": base64.b64encode(bytes(indata)).decode("ascii")})
         try:
@@ -245,6 +248,11 @@ class PointPilotController(QObject):
         self._set_state(SessionState.PAUSED)
         self.detail_changed.emit("Stopped. Start a fresh voice session when ready.")
 
+    def mute(self, muted: bool) -> None:
+        if self.voice:
+            self.voice.mute(muted)
+        self.detail_changed.emit("Microphone muted. The active session remains available." if muted else "Microphone unmuted. Listening again.")
+
     def escape(self) -> None:
         self.stop()
 
@@ -306,4 +314,3 @@ class PointPilotController(QObject):
     def _set_state(self, state: SessionState) -> None:
         self._state = state
         self.state_changed.emit(state.value)
-
