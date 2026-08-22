@@ -17,3 +17,6 @@ TestResults/
 
 # PointPilot debug artifacts may contain screenshots or transcripts.
 debug-artifacts/
+
+# Local run trace artifacts
+traces/

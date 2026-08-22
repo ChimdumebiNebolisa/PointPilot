@@ -1,0 +1,28 @@
+schemaVersion: 1
+name: notepad-smoke
+description: >
+  Complete deterministic example: binds to a running Notepad window, types text,
+  captures diagnostic evidence, and asserts the window is still visible and the
+  typed buffer can be verified. Run with:
+    pointpilot run examples/notepad-demo.yaml
+variables:
+  message:
+    default: PointPilot deterministic replay
+target:
+  processName: Notepad
+defaults:
+  timeoutMs: 5000
+steps:
+  - step: focus-window
+    name: Bring Notepad forward
+  - step: type-text
+    text: "${message}"
+    name: Type the demo message
+  - step: screenshot
+    name: Capture before-state evidence
+  - step: assert-window
+    condition: visible
+    name: Notepad must still be visible
+  - step: wait
+    until:
+      delayMs: 250

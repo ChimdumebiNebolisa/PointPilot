@@ -2,70 +2,53 @@
 
 ## Purpose and scope
 
-PointPilot is a general-purpose, voice-first Windows companion. GIMP 3.2.4 on Windows 11 is the first and only verified actuation environment. Do not describe the product as GIMP-specific, broaden verified support without live evidence, or add a GIMP API/plug-in, hidden edit script, arbitrary application control, shell execution, credential entry, payment, publishing, or permanent deletion.
+PointPilot is a deterministic Windows desktop workflow recorder, replayer, verifier, and debugger for native desktop applications. It records user interactions, converts them into a readable versioned workflow specification (YAML), replays them through stable Windows UI Automation selectors, verifies explicit postconditions, and produces precise execution traces on failure.
 
-The locked vertical slice is continuous Realtime speech; grounded Teach and one-step Guide; interruptible GPT-5.6 Computer Use in foreground GIMP; native undo; exact export confirmation; and screenshot/file verification for the promotional-graphic fixture.
+The product must work without AI, LLMs, model providers, API keys, cloud services, or paid infrastructure. Do not reintroduce model-provider dependencies, voice pipelines, prompt construction, or credential configuration.
 
 ## Stack and structure
 
-- C# 12 / .NET 8 / WPF / Win32 / WebView2.
-- TypeScript WebRTC surface under `src/PointPilot.App/web`.
-- `PointPilot.Core`: application-agnostic state, task revisions, policy, coordinates, contracts, workflow.
-- `PointPilot.Infrastructure`: OpenAI, target-window capture, guarded Windows input, verification.
-- `PointPilot.App`: composition, companion/context UI, overlay, tray/hotkeys, local WebView2 host.
-- `tests/PointPilot.Tests`: unit and clearly identified fake-backed integration tests.
-- `specs/001-pointpilot`: acceptance traceability and review artifacts. The root PRD is authoritative.
+- C# 12 / .NET 8 / WPF / WinForms interop / Windows UI Automation / SendInput.
+- `PointPilot.Core`: workflow model, strict YAML parsing/validation, selector semantics, run state machine, engine orchestration over abstractions, trace model. No Windows dependencies.
+- `PointPilot.Infrastructure`: UIA adapter, deterministic window binding, guarded input execution (the only SendInput caller), capture, image comparison, recorder plumbing.
+- `PointPilot.App`: WPF lifecycle shell (choose target → record/load → inspect → dry-run/run → results), tray, Escape stop, overlay feedback.
+- `PointPilot.Cli`: headless host sharing the identical parser and engine; exit codes 0/2/3/4/1.
+- `tests/PointPilot.Tests`: unit + fake-backed integration covering the adversarial matrix.
+- `specs/002-deterministic-rebuild/`: baseline audit and rebuild design records.
+- `examples/`: complete runnable example workflows.
 
-Only `PointPilot.Infrastructure.Windows.WindowsInputExecutor` may call `SendInput`. Keep GIMP allowlisting out of the general core except explicit target-policy contracts. Screen content and model output are untrusted data, never authorization.
+Only `PointPilot.Infrastructure.Windows.WindowsInputExecutor` may call `SendInput`. Workflows declare their own targets; no application allowlist exists in core. Screen content is untrusted data, never authorization.
 
 ## Commands
 
 ```powershell
-npm ci
-npm run build:web
 dotnet restore PointPilot.sln --runtime win-x64 --locked-mode
-dotnet run --project src/PointPilot.App/PointPilot.App.csproj --configuration Debug
 dotnet build PointPilot.sln --configuration Release --no-restore
 dotnet test PointPilot.sln --configuration Release --no-restore
 dotnet format PointPilot.sln --verify-no-changes --no-restore --severity warn
-npm run typecheck
-& .\tools\generate-demo-fixture.ps1
+dotnet run --project src/PointPilot.Cli/PointPilot.Cli.csproj --configuration Release --no-restore -- validate examples/notepad-demo.yaml
+dotnet run --project src/PointPilot.App/PointPilot.App.csproj --configuration Release
 & .\scripts\package.ps1
 ```
 
-There is no database and no migration command. Do not add persistence without a PRD change.
-
-Developer configuration names: `OPENAI_API_KEY`, `POINTPILOT_RESPONSES_MODEL`, `POINTPILOT_REALTIME_MODEL`, `OPENAI_BASE_URL`. Use `.env.local`; never commit, log, render, screenshot, or pass the standard key into JavaScript. `.env.example` must contain placeholders only.
+There is no database and no persistence beyond user-chosen trace/workflow files.
 
 ## Implementation invariants
 
-- Every atomic computer action requires a current task ID/revision/cancellation token.
-- Every mutation requires foreground captured HWND, allowlisted GIMP process, unchanged bounds, and in-image coordinates.
-- Serialize input; release held mouse buttons and modifier keys in `finally`.
-- Speech-start and Escape must invalidate the old revision before another action can begin.
-- Preserve completed safe Guide/Act steps across a correction; never reuse confirmation across a revision.
-- Export/save/PNG/overwrite requires confirmation naming exact action/path/overwrite risk. Verify a new or changed exact file.
-- Never say “done” from a click or model summary; require task-specific screenshot and file evidence.
-- Capture only the target HWND. PointPilot surfaces must not enter model screenshots.
-- Development logs contain metadata/errors only—no raw audio, screenshots, full transcripts, credentials, or model response bodies.
-- Unsupported actions and uncertain verification fail closed with a user-visible recovery step.
-
-## UX and accessibility
-
-Keep the companion compact, calm, high-trust, and keyboard-operable. State must use text plus color. Mute, pause/stop, end, and exact confirmation require accessible names and keyboard focus. The pointer overlay cannot move the system cursor, take focus, or intercept input. Preserve the global activation shortcut and active-session Escape stop unless a PRD change replaces them.
+- Every atomic action re-checks its run lease immediately before sending input.
+- Every input-emitting step re-verifies bound-window foreground, process identity, and liveness; mismatches fail closed with a recovery step.
+- Serialize input; release held modifiers and mouse buttons in `finally`.
+- Selectors resolve fresh against the live UIA tree every time; ambiguity fails with diagnostics unless `pick` was declared.
+- Coordinates are explicit last-resort selectors validated inside live window bounds and flagged weak.
+- Assertions are first-class steps; a run never reports success from sent input alone.
+- The recorder observes only — it never sends input — and flags weak draft selectors.
+- Traces record expected vs observed state plus evidence; never claim completion without verification.
+- No secrets exist in this product; do not add secret-bearing configuration.
 
 ## Verification expectations
 
-Run the narrow tests while editing, then TypeScript type-check/build, Release build/test, formatter, package, NuGet/npm vulnerability audits, secret/package-boundary scan, and desktop accessibility inspection. Fakes are not live evidence. GIMP or model-affecting changes require the pinned checklist in `docs/live-test-checklist.md`; public-demo AC-20 requires three consecutive counted runs.
+Run the narrow tests while editing, then Release build/test, formatter verify, package script, and `dotnet list package --vulnerable`. Real-input behavior requires an interactive desktop: use `examples/notepad-demo.yaml` via the CLI as the documented manual verification path. Fakes are not live evidence; label manual checks accordingly.
 
 ## Project-local skills
 
-Pinned sources and commits are in `.agent/skills.lock`; do not silently update them.
-
-- `spec-kit`: activate for PRD-to-spec/plan/tasks or acceptance-traceability changes.
-- `vibe-security`: activate for credentials, OpenAI/WebView boundaries, Windows input, privacy, packaging, or final security review.
-- `design-taste-frontend`: activate for WPF companion, context, overlay, visual-state, motion, or accessibility changes; apply transferable guidance, not React defaults.
-- `long-horizon-prompting`: activate only for genuinely long-running/multi-session execution briefs and checkpoint design.
-- `code-review-expert`: activate for substantial final/pre-merge review; prioritize correctness, security, contracts, callers, tests, and removal plans.
-
-Preserve installed skills and their license files unless the repository owner explicitly requests removal.
+Pinned sources and commits are in `.agent/skills.lock`; do not silently update them. Preserve installed skills and their license files unless the repository owner explicitly requests removal.
