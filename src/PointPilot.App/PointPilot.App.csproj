@@ -11,9 +11,5 @@
   <ItemGroup>
     <ProjectReference Include="..\PointPilot.Core\PointPilot.Core.csproj" />
     <ProjectReference Include="..\PointPilot.Infrastructure\PointPilot.Infrastructure.csproj" />
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="web\dist\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
