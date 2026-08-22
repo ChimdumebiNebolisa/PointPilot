@@ -1,4 +1,0 @@
-PointPilot run Failed — workflow 'bad'
-Target: not bound
-Steps: 0 passed, 0 failed, 0 skipped. Started 2026-08-22 05:44:59Z, ended 2026-08-22 05:44:59Z.
-Run failure: No running window matched target process 'definitely-not-running-app'. Start the application before running this workflow.

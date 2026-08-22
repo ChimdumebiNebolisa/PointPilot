@@ -20,3 +20,4 @@ debug-artifacts/
 
 # Local run trace artifacts
 traces/
+pointpilot-traces/
