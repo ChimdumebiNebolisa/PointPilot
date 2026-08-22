@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net8.0-windows7.0": {
+      "YamlDotNet": {
+        "type": "Transitive",
+        "resolved": "16.3.0",
+        "contentHash": "SgMOdxbz8X65z8hraIs6hOEdnkH6hESTAIUa7viEngHOYaH+6q5XJmwr1+yb9vJpNQ19hCQY69xbFsLtXpobQA=="
+      },
+      "pointpilot.core": {
+        "type": "Project",
+        "dependencies": {
+          "YamlDotNet": "[16.3.0, )"
+        }
+      },
+      "pointpilot.infrastructure": {
+        "type": "Project",
+        "dependencies": {
+          "PointPilot.Core": "[1.0.0, )"
+        }
+      }
+    },
+    "net8.0-windows7.0/win-x64": {}
+  }
+}
