@@ -65,7 +65,6 @@ internal sealed class FakeMonitor : IForegroundMonitor
     public nint GetForegroundHandle() => Foreground;
     public bool IsWindowAlive(nint handle) => Alive.TryGetValue(handle, out var alive) ? alive : true;
     public bool IsWindowMinimized(nint handle) => Minimized.TryGetValue(handle, out var min) && min;
-    public bool IsWindowMaximized(nint handle) => false;
     public uint GetProcessId(nint handle) => ProcessIds.TryGetValue(handle, out var pid) ? pid : 999;
     public void SetForeground(nint handle) { SetForegroundCalls.Add(handle); Foreground = handle; }
 }

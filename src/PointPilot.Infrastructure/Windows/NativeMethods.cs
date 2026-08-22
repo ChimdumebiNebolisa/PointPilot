@@ -13,7 +13,6 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)][return: MarshalAs(UnmanagedType.Bool)] internal static extern bool PrintWindow(nint hwnd, nint hdc, uint flags);
     [DllImport("user32.dll")][return: MarshalAs(UnmanagedType.Bool)] internal static extern bool IsWindow(nint hWnd);
     [DllImport("user32.dll")][return: MarshalAs(UnmanagedType.Bool)] internal static extern bool IsIconic(nint hWnd);
-    [DllImport("user32.dll")][return: MarshalAs(UnmanagedType.Bool)] internal static extern bool IsZoomed(nint hWnd);
     [DllImport("user32.dll")] internal static extern short VkKeyScan(char value);    [DllImport("user32.dll")][return: MarshalAs(UnmanagedType.Bool)] internal static extern bool SetCursorPos(int x, int y);
 
     [StructLayout(LayoutKind.Sequential)] internal struct Rect { internal int Left, Top, Right, Bottom; }

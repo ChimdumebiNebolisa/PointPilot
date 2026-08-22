@@ -13,8 +13,6 @@ public sealed class ForegroundMonitor : IForegroundMonitor
 
     public bool IsWindowMinimized(nint handle) => NativeMethods.IsIconic(handle);
 
-    public bool IsWindowMaximized(nint handle) => NativeMethods.IsZoomed(handle);
-
     public uint GetProcessId(nint handle)
     {
         _ = NativeMethods.GetWindowThreadProcessId(handle, out var processId);
@@ -47,9 +45,4 @@ public sealed class ForegroundMonitor : IForegroundMonitor
         throw new StepFailureException("Windows refused to bring the target window to the foreground. Check that it is not minimized or on a locked desktop.");
     }
 
-    public WindowBounds GetBounds(nint handle)
-    {
-        if (!NativeMethods.GetWindowRect(handle, out var rect)) return new(0, 0, 0, 0);
-        return new(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top);
-    }
 }

@@ -10,7 +10,6 @@ public interface IForegroundMonitor
     nint GetForegroundHandle();
     bool IsWindowAlive(nint handle);
     bool IsWindowMinimized(nint handle);
-    bool IsWindowMaximized(nint handle);
     uint GetProcessId(nint handle);
     void SetForeground(nint handle);
 }
