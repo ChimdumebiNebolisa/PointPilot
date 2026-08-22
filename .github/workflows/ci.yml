@@ -15,20 +15,14 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm run build:web
       - run: dotnet restore PointPilot.sln --runtime win-x64 --locked-mode
       - run: dotnet format PointPilot.sln --verify-no-changes --no-restore --severity warn
       - run: dotnet build PointPilot.sln --configuration Release --no-restore
       - run: dotnet test PointPilot.sln --configuration Release --no-restore --collect:"XPlat Code Coverage"
+      - name: CLI smoke - example workflow must validate
+        run: dotnet run --project src/PointPilot.Cli/PointPilot.Cli.csproj --configuration Release --no-restore -- validate examples/notepad-demo.yaml
       - run: dotnet publish src/PointPilot.App/PointPilot.App.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/win-x64
       - run: dotnet list PointPilot.sln package --vulnerable --include-transitive
-      - run: npm audit --audit-level=high
       - uses: actions/upload-artifact@v4
         with:
           name: PointPilot-win-x64

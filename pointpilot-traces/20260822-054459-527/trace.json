@@ -1,0 +1,22 @@
+{
+  "RunId": "986ec1c9-412e-42d7-b152-b7d8270331e2",
+  "WorkflowName": "bad",
+  "SchemaVersion": 1,
+  "WorkflowHash": "ed6e03c0de01eb51fbd5f795b872282def71979217812c21e3af3c85c73bb9aa",
+  "Status": "Failed",
+  "StartedUtc": "2026-08-22T05:44:59.6112609+00:00",
+  "EndedUtc": "2026-08-22T05:44:59.6617527+00:00",
+  "Machine": {
+    "OsVersion": "Microsoft Windows NT 10.0.26200.0",
+    "ClrVersion": "8.0.25",
+    "Is64BitProcess": true,
+    "ScreenWidth": 1280,
+    "ScreenHeight": 800
+  },
+  "Target": null,
+  "Steps": [],
+  "DryRun": false,
+  "FailureReason": "No running window matched target process 'definitely-not-running-app'. Start the application before running this workflow.",
+  "Passed": 0,
+  "FailedCount": 0
+}
