@@ -14,8 +14,6 @@ if (-not $publish.StartsWith($artifacts + [System.IO.Path]::DirectorySeparatorCh
 
 Push-Location $root
 try {
-    npm ci
-    npm run build:web
     if (Test-Path -LiteralPath $publish) { Remove-Item -LiteralPath $publish -Recurse -Force }
     dotnet clean PointPilot.sln --configuration $Configuration
     dotnet restore PointPilot.sln --runtime win-x64 --locked-mode

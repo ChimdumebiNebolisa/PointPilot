@@ -11,16 +11,23 @@ public readonly record struct WindowBounds(int Left, int Top, int Width, int Hei
 }
 public static class CoordinateMapper
 {
-    public static ScreenPoint ImageToScreen(ScreenPoint imagePoint, int imageWidth, int imageHeight, WindowBounds window)
+    // Workflow coordinates are declared relative to the bound window's top-left corner
+    // and are always clamped strictly inside the live window bounds.
+    public static ScreenPoint RelativeToScreen(ScreenPoint relative, WindowBounds window)
     {
-        if (imageWidth <= 0 || imageHeight <= 0 || !window.IsValid)
-            throw new ArgumentOutOfRangeException(nameof(imageWidth), "Image and window dimensions must be positive.");
-        if (imagePoint.X < 0 || imagePoint.Y < 0 || imagePoint.X >= imageWidth || imagePoint.Y >= imageHeight)
-            throw new ArgumentOutOfRangeException(nameof(imagePoint), "Image coordinate is outside the captured image.");
+        if (!window.IsValid) throw new ArgumentOutOfRangeException(nameof(window), "The window bounds are invalid.");
+        if (relative.X < 0 || relative.Y < 0 || relative.X >= window.Width || relative.Y >= window.Height)
+            throw new ArgumentOutOfRangeException(nameof(relative), $"Coordinate ({relative.X}, {relative.Y}) is outside the target window bounds {window.Width}x{window.Height}.");
+        return new ScreenPoint(window.Left + relative.X, window.Top + relative.Y);
+    }
 
-        var x = window.Left + (int)Math.Round(imagePoint.X * (window.Width / (double)imageWidth), MidpointRounding.AwayFromZero);
-        var y = window.Top + (int)Math.Round(imagePoint.Y * (window.Height / (double)imageHeight), MidpointRounding.AwayFromZero);
-        return new ScreenPoint(Math.Min(x, window.Right - 1), Math.Min(y, window.Bottom - 1));
+    public static ScreenPoint ClampIntoCenter(WindowBounds elementBounds, WindowBounds window)
+    {
+        var cx = elementBounds.Left + elementBounds.Width / 2;
+        var cy = elementBounds.Top + elementBounds.Height / 2;
+        cx = Math.Clamp(cx, window.Left, window.Right - 1);
+        cy = Math.Clamp(cy, window.Top, window.Bottom - 1);
+        return new ScreenPoint(cx, cy);
     }
 }
 

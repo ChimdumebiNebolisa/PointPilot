@@ -8,6 +8,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PointPilot.Infrastructure",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PointPilot.App", "src\PointPilot.App\PointPilot.App.csproj", "{3C922776-D47E-48B2-86E7-338990229DBA}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PointPilot.Cli", "src\PointPilot.Cli\PointPilot.Cli.csproj", "{D4A5B7C1-6E2F-4A93-9B8D-1F0C2E5A7B31}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PointPilot.Tests", "tests\PointPilot.Tests\PointPilot.Tests.csproj", "{74B16894-A56B-492F-A479-A1855D6789DE}"
 EndProject
 Global
@@ -28,6 +30,10 @@ Global
 		{3C922776-D47E-48B2-86E7-338990229DBA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3C922776-D47E-48B2-86E7-338990229DBA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3C922776-D47E-48B2-86E7-338990229DBA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D4A5B7C1-6E2F-4A93-9B8D-1F0C2E5A7B31}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D4A5B7C1-6E2F-4A93-9B8D-1F0C2E5A7B31}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D4A5B7C1-6E2F-4A93-9B8D-1F0C2E5A7B31}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D4A5B7C1-6E2F-4A93-9B8D-1F0C2E5A7B31}.Release|Any CPU.Build.0 = Release|Any CPU
 		{74B16894-A56B-492F-A479-A1855D6789DE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{74B16894-A56B-492F-A479-A1855D6789DE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{74B16894-A56B-492F-A479-A1855D6789DE}.Release|Any CPU.ActiveCfg = Release|Any CPU

@@ -1,9 +1,16 @@
 using System.Windows;
 using System.Windows.Interop;
 using PointPilot.Core;
+using PointPilot.Core.Tracing;
+using StepFailureException = PointPilot.Core.Elements.StepFailureException;
 
 namespace PointPilot.App;
 
+/// <summary>
+/// Non-activating, click-through overlay used to flash the bounds of resolved targets
+/// after a run. It never moves the system cursor, never takes focus, and never
+/// intercepts input (WS_EX_TRANSPARENT | WS_EX_NOACTIVATE).
+/// </summary>
 public partial class OverlayWindow : Window
 {
     private const int ExTransparent = 0x20;
@@ -20,16 +27,14 @@ public partial class OverlayWindow : Window
         };
     }
 
-    public void ShowTarget(WindowSnapshot snapshot, WindowBounds? imageTarget)
+    public void FlashResolved(RunTrace trace)
     {
-        if (imageTarget is null) { Hide(); return; }
-        var target = imageTarget.Value;
-        var scaleX = snapshot.Bounds.Width / (double)snapshot.ImageWidth;
-        var scaleY = snapshot.Bounds.Height / (double)snapshot.ImageHeight;
-        Left = snapshot.Bounds.Left + target.Left * scaleX;
-        Top = snapshot.Bounds.Top + target.Top * scaleY;
-        Width = Math.Max(28, target.Width * scaleX);
-        Height = Math.Max(28, target.Height * scaleY);
+        var lastResolved = trace.Steps.LastOrDefault(s => s.Resolved is not null)?.Resolved;
+        if (lastResolved is null || !lastResolved.Bounds.IsValid) return;
+        Left = lastResolved.Bounds.Left - 4;
+        Top = lastResolved.Bounds.Top - 4;
+        Width = Math.Max(28, lastResolved.Bounds.Width + 8);
+        Height = Math.Max(28, lastResolved.Bounds.Height + 8);
         Show();
     }
 

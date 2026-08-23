@@ -1,14 +1,15 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
-using System.Net.Http;
-using System.Text.Json;
 using System.Windows;
 using System.Windows.Interop;
-using System.Windows.Media;
-using Microsoft.Web.WebView2.Core;
-using PointPilot.Core;
+using Microsoft.Win32;
+using PointPilot.Core.Engine;
+using PointPilot.Core.Tracing;
+using PointPilot.Core.Workflows;
 using PointPilot.Infrastructure;
-using PointPilot.Infrastructure.OpenAI;
+using PointPilot.Infrastructure.Recording;
+using PointPilot.Infrastructure.Verification;
 using PointPilot.Infrastructure.Windows;
 using Forms = System.Windows.Forms;
 
@@ -16,413 +17,249 @@ namespace PointPilot.App;
 
 public partial class MainWindow : Window
 {
-    private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(90) };
-    private readonly PointPilotStateMachine _state = new();
-    private readonly TaskCoordinator _tasks = new();
-    private readonly WindowContextService _windows = new();
-    private readonly OverlayWindow _overlay = new();
     private readonly DevelopmentLog _log = new();
+    private readonly OverlayWindow _overlay = new();
     private readonly Forms.NotifyIcon _tray;
-    private readonly TaskCompletionSource _webReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private RealtimeTokenService? _tokens;
-    private PointPilotWorkflow? _workflow;
-    private WindowsInputExecutor? _executor;
+    private readonly WorkflowRunner _runner;
+    private readonly UiElementCatalog _catalog = new();
     private GlobalHotkeyService? _hotkeys;
-    private ForegroundWindowTracker? _foregroundTracker;
-    private CancellationTokenSource? _activeTool;
-    private bool _sessionActive;
-    private bool _muted;
+    private CancellationTokenSource? _activeRun;
+    private WorkflowDefinition? _workflow;
+    private WorkflowDefinition? _lastDraft;
+    private UiAutomationRecorder? _recorder;
     private bool _allowClose;
-    private bool _interruptedTask;
-    private string? _pendingCallId;
-    private string? _pendingAction;
-    private string? _pendingPath;
+    private string? _traceDirectory;
 
     public MainWindow()
     {
         InitializeComponent();
-        _state.Changed += (_, state) => { _log.Write("state_changed", new { state }); Dispatcher.InvokeAsync(() => RenderState(state)); };
-        _state.Rejected += (_, transition) => _log.Write("state_transition_rejected", new { transition.From, transition.To });
         _tray = BuildTrayIcon();
-        ConfigureServices();
-        Loaded += async (_, _) =>
-        {
-            PositionCompanion();
-            await InitializeRealtimeSurfaceAsync();
-        };
+        _runner = CreateRunner();
+        Loaded += (_, _) => RefreshWindows();
     }
 
-    private void ConfigureServices()
+    private static WorkflowRunner CreateRunner() => new(
+        new WindowBinder(),
+        new WindowsInputExecutor(),
+        new ForegroundMonitor(),
+        new ScreenCaptureService(),
+        new ExactImageComparer(),
+        new SystemClock());
+
+    // ---- Target selection ---------------------------------------------------------------
+
+    private void RefreshWindows_Click(object sender, RoutedEventArgs e) => RefreshWindows();
+
+    private void RefreshWindows()
+    {
+        var previous = (TargetCombo.SelectedItem as TopLevelWindowInfo)?.Handle;
+        var windows = _catalog.ListTopLevelWindows();
+        TargetCombo.ItemsSource = windows;
+        TargetCombo.DisplayMemberPath = nameof(TopLevelWindowInfo.DisplayName);
+        if (previous is { } handle)
+        {
+            var match = windows.FirstOrDefault(w => w.Handle == handle);
+            if (match is not null) TargetCombo.SelectedItem = match;
+        }
+        _log.Write("windows_listed", new { count = windows.Count });
+    }
+
+    private void Target_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) =>
+        TargetDetails.Text = TargetCombo.SelectedItem is TopLevelWindowInfo target
+            ? $"{target.ProcessName}.exe — pid {target.ProcessId}, hwnd 0x{target.Handle:x}, '{target.Title}'"
+            : "Select the running application a workflow should bind to.";
+
+    // ---- Workflow load / record ---------------------------------------------------------
+
+    private void LoadWorkflow_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "PointPilot workflow (*.yaml;*.yml)|*.yaml;*.yml|All files (*.*)|*.*", Title = "Load workflow" };
+        if (dialog.ShowDialog(this) != true) return;
+        LoadWorkflowFile(dialog.FileName);
+    }
+
+    private void LoadWorkflowFile(string path)
     {
         try
         {
-            var options = OpenAiOptions.Load();
-            _tokens = new RealtimeTokenService(_http, options);
-            var visual = new OpenAiVisualReasoningService(_http, options);
-            _executor = new WindowsInputExecutor(_tasks);
-            var computer = new ComputerUseService(_http, options, _windows, _executor, _tasks);
-            var verification = new VerificationService(visual);
-            _workflow = new PointPilotWorkflow(_state, _tasks, _windows, visual, computer, verification);
+            var text = File.ReadAllText(path);
+            ApplyParsed(WorkflowParser.Parse(text, path));
+            WorkflowPathText.Text = $"Loaded: {path}";
         }
-        catch (Exception)
+        catch (IOException ex)
         {
-            ShowSafeError(ErrorMapper.Map(IntegrationFailure.MissingApiKey));
+            ShowValidation($"The workflow file could not be read: {ex.Message}");
         }
     }
 
-    private async Task InitializeRealtimeSurfaceAsync()
+    private void ApplyParsed(WorkflowParseResult parsed)
     {
-        try
+        if (!parsed.Success)
         {
-            await RealtimeWebView.EnsureCoreWebView2Async();
-            var core = RealtimeWebView.CoreWebView2;
-            core.Settings.AreDevToolsEnabled = false;
-            core.Settings.AreDefaultScriptDialogsEnabled = false;
-            core.Settings.IsStatusBarEnabled = false;
-            core.Settings.AreHostObjectsAllowed = false;
-            core.PermissionRequested += (_, args) =>
-            {
-                args.State = args.PermissionKind == CoreWebView2PermissionKind.Microphone && _sessionActive
-                    ? CoreWebView2PermissionState.Allow
-                    : CoreWebView2PermissionState.Deny;
-            };
-            core.WebMessageReceived += RealtimeWebMessageReceived;
-            var webRoot = Path.Combine(AppContext.BaseDirectory, "web", "dist");
-            if (!Directory.Exists(webRoot)) throw new DirectoryNotFoundException("The Realtime web client was not included in this build.");
-            core.SetVirtualHostNameToFolderMapping("pointpilot.local", webRoot, CoreWebView2HostResourceAccessKind.DenyCors);
-            RealtimeWebView.Source = new Uri("https://pointpilot.local/index.html");
-        }
-        catch
-        {
-            ShowSafeError(ErrorMapper.Map(IntegrationFailure.Realtime));
-        }
-    }
-
-    private async void SessionButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_state.Current == PointPilotState.Paused)
-        {
-            if (_tasks.Snapshot.TaskId is not null) _tasks.Resume();
-            _state.Transition(PointPilotState.Listening);
-            PostWeb(new { type = "mute", muted = _muted });
+            _workflow = null;
+            StepsList.ItemsSource = null;
+            ShowValidation(string.Join(Environment.NewLine, parsed.Diagnostics.Select(d => $"• {d.Path}: {d.Message}")));
             return;
         }
-        if (_sessionActive) { ShowWithoutStealingFocus(); return; }
-        await StartSessionAsync();
+        ClearValidation();
+        _workflow = parsed.Definition;
+        StepsList.ItemsSource = parsed.Definition!.Steps.Select((s, i) =>
+        {
+            var selector = WorkflowRunner.SelectorOf(s);
+            var weak = selector is not null && WorkflowRunner.IsWeakSelector(selector);
+            return $"{i + 1}. {WorkflowRunner.KindOf(s)}{(s.Name is null ? "" : $" — {s.Name}")}{(weak ? "   [weak target]" : "")}";
+        }).ToList();
+        StatusText.Text = $"Workflow '{parsed.Definition.Name}' validated with {parsed.Definition.Steps.Count} steps.";
+        UpdateRunButtons();
     }
 
-    private async Task StartSessionAsync()
+    private async void RecordButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_tokens is null)
+        if (_recorder is not null) { StopRecording(); return; }
+        if (TargetCombo.SelectedItem is not TopLevelWindowInfo target)
         {
-            ShowSafeError(ErrorMapper.Map(IntegrationFailure.MissingApiKey));
+            ShowValidation("Select a target window before recording.");
             return;
         }
         try
         {
-            ClearError();
-            if (_state.Current == PointPilotState.Error) _state.Transition(PointPilotState.Idle);
-            _state.Transition(PointPilotState.Connecting);
-            SessionButton.IsEnabled = false;
-            _sessionActive = true;
-            _hotkeys?.SetEscapeEnabled(true);
-            await _webReady.Task.WaitAsync(TimeSpan.FromSeconds(15));
-            var response = await _tokens.CreateClientSecretAsync(CancellationToken.None);
-            using var document = JsonDocument.Parse(response);
-            var secret = document.RootElement.GetProperty("value").GetString();
-            if (string.IsNullOrWhiteSpace(secret)) throw new InvalidOperationException("Realtime client secret response was incomplete.");
-            PostWeb(new { type = "connect", clientSecret = secret });
-            TranscriptText.Text = "Listening… ask a follow-up whenever you’re ready.";
+            _recorder = UiAutomationRecorder.Start(new Core.Workflows.TargetSpec(target.ProcessName, ProcessMatchMode.Exact, null));
+            RecordButton.Content = "S_top recording";
+            StatusText.Text = $"Recording interactions with {target.ProcessName}. Click controls and type as usual, then stop recording.";
+            SaveDraftButton.IsEnabled = false;
         }
-        catch (OpenAiIntegrationException exception)
+        catch (Core.Elements.StepFailureException ex)
         {
-            ResetSessionAfterFailure();
-            ShowSafeError(exception.SafeError);
+            ShowValidation(ex.Message);
         }
-        catch
-        {
-            ResetSessionAfterFailure();
-            ShowSafeError(ErrorMapper.Map(IntegrationFailure.Realtime));
-        }
+        await Task.CompletedTask;
     }
 
-    private void RealtimeWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    private void StopRecording()
     {
+        if (_recorder is null) return;
+        _lastDraft = _recorder.Stop();
+        _recorder.Dispose();
+        _recorder = null;
+        RecordButton.Content = "_Start recording";
+        SaveDraftButton.IsEnabled = true;
+        ApplyParsed(WorkflowParser.Parse(WorkflowYamlWriter.Write(_lastDraft), "(recorded draft)"));
+        _workflow = _lastDraft;
+        StatusText.Text = "Recording stopped. The draft is loaded below — review weak selectors, then save or run it.";
+    }
+
+    private void SaveDraft_Click(object sender, RoutedEventArgs e)
+    {
+        if (_workflow is null) return;
+        var dialog = new Microsoft.Win32.SaveFileDialog { Filter = "PointPilot workflow (*.yaml)|*.yaml", FileName = $"{_workflow.Name}.yaml", Title = "Save workflow draft" };
+        if (dialog.ShowDialog(this) != true) return;
+        File.WriteAllText(dialog.FileName, WorkflowYamlWriter.Write(_workflow));
+        WorkflowPathText.Text = $"Saved: {dialog.FileName}";
+    }
+
+    // ---- Run lifecycle -------------------------------------------------------------------
+
+    private async void DryRun_Click(object sender, RoutedEventArgs e) => await ExecuteAsync(dryRun: true);
+
+    private async void Run_Click(object sender, RoutedEventArgs e) => await ExecuteAsync(dryRun: false);
+
+    private async Task ExecuteAsync(bool dryRun)
+    {
+        if (_workflow is null)
+        {
+            ShowValidation("Load or record a workflow first.");
+            return;
+        }
+        if (_activeRun is not null) return;
+        SetState(RunState.Running);
+        _activeRun = new CancellationTokenSource();
+        StopButton.IsEnabled = true;
+        LoadButton.IsEnabled = RecordButton.IsEnabled = DryRunButton.IsEnabled = RunButton.IsEnabled = false;
+        ResultBox.Text = dryRun ? "Dry run in progress…" : "Run in progress…";
         try
         {
-            using var message = JsonDocument.Parse(e.WebMessageAsJson);
-            var root = message.RootElement;
-            switch (root.GetProperty("type").GetString())
-            {
-                case "ready": _webReady.TrySetResult(); break;
-                case "connected":
-                    if (_state.Current == PointPilotState.Connecting) _state.Transition(PointPilotState.Listening);
-                    EnableSessionControls();
-                    break;
-                case "disconnected": EndSession(); break;
-                case "speech_started": HandleSpeechStarted(); break;
-                case "transcript": RenderTranscript(root); break;
-                case "tool_call": _ = HandleToolCallAsync(root.Clone()); break;
-                case "error": ShowSafeError(ErrorMapper.Map(IntegrationFailure.Realtime)); break;
-            }
-        }
-        catch
-        {
-            ShowSafeError(ErrorMapper.Map(IntegrationFailure.Realtime));
-        }
-    }
-
-    private void HandleSpeechStarted()
-    {
-        var wasActing = _state.Current is PointPilotState.Planning or PointPilotState.Acting or PointPilotState.Verifying;
-        if (wasActing && _tasks.Snapshot.TaskId is not null)
-        {
-            _tasks.Interrupt("User spoke a correction; stop before the next atomic action and re-evaluate the live screen.");
-            _interruptedTask = true;
-        }
-        _activeTool?.Cancel();
-        _overlay.Hide();
-        if (_state.CanTransition(PointPilotState.Listening)) _state.Transition(PointPilotState.Listening);
-        TranscriptText.Text = wasActing ? "Interrupted safely. Listening for your correction…" : "Listening…";
-    }
-
-    private async Task HandleToolCallAsync(JsonElement message)
-    {
-        var callId = message.GetProperty("callId").GetString() ?? string.Empty;
-        var name = message.GetProperty("name").GetString() ?? string.Empty;
-        _log.Write("realtime_tool_call", new { name });
-        var arguments = message.GetProperty("arguments").GetString() ?? "{}";
-        _activeTool?.Cancel();
-        _activeTool?.Dispose();
-        _activeTool = new CancellationTokenSource();
-        try
-        {
-            if (_workflow is null) throw new InvalidOperationException("PointPilot is not configured.");
-            if (_foregroundTracker?.RestoreIfPointPilotIsForeground() == false)
-                throw new InvalidOperationException("Return the target application to the foreground before continuing.");
-            await Task.Delay(100, _activeTool.Token);
-            using var args = JsonDocument.Parse(arguments);
-            WorkflowOutcome outcome = name switch
-            {
-                "teach" => await _workflow.TeachAsync(ReadString(args.RootElement, "request"), _activeTool.Token),
-                "guide" => await _workflow.GuideAsync(ReadString(args.RootElement, "goal"), ReadString(args.RootElement, "expected_change"), _activeTool.Token),
-                "act" => await HandleActAsync(args.RootElement, _activeTool.Token),
-                "undo" => await _workflow.UndoAsync(_activeTool.Token),
-                _ => throw new NotSupportedException($"Unsupported Realtime tool: {name}.")
-            };
-            ShowOutcome(outcome);
-            if (outcome.RequiresConfirmation)
-            {
-                _pendingCallId = callId;
-                _pendingAction = outcome.ConfirmationAction;
-                _pendingPath = outcome.TargetPath;
-                ShowConfirmation(outcome);
-                return;
-            }
-            SendToolResult(callId, outcome.Summary);
-            _interruptedTask = false;
+            var outputDirectory = Path.Combine(AppContext.BaseDirectory, "traces", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
+            _traceDirectory = outputDirectory;
+            var result = await _runner.ExecuteAsync(
+                _workflow,
+                new RunOptions(new Dictionary<string, string>(), dryRun, outputDirectory, MachineInfoBuilder.Build()),
+                _activeRun.Token);
+            ResultBox.Text = result.Summary;
+            StatusText.Text = $"Run {result.Trace.Status}. Trace artifacts: {outputDirectory}";
+            _overlay.FlashResolved(result.Trace);
+            _log.Write("run_completed", new { status = result.Trace.Status, steps = result.Trace.Steps.Count });
         }
         catch (OperationCanceledException)
         {
-            if (_interruptedTask) SendInterruptedToolResult(callId, "The old task revision was interrupted before its next action. Preserve completed safe steps and use the user’s correction.");
-            else SendToolResult(callId, "The task was stopped before the next action. Inspect the foreground GIMP window before resuming.");
+            StatusText.Text = "Run cancelled. No further actions were sent.";
+            ResultBox.Text += Environment.NewLine + "Cancelled at the next atomic action boundary.";
         }
-        catch (OpenAiIntegrationException exception)
+        finally
         {
-            ShowSafeError(exception.SafeError);
-            SendToolResult(callId, exception.SafeError.WhatFailed + " " + exception.SafeError.SafeNextStep);
-        }
-        catch (Exception exception)
-        {
-            var failure = exception is UnauthorizedAccessException ? IntegrationFailure.WindowChanged : IntegrationFailure.Unknown;
-            var safe = ErrorMapper.Map(failure);
-            ShowSafeError(safe);
-            SendToolResult(callId, safe.WhatFailed + " " + safe.SafeNextStep);
+            _activeRun.Dispose();
+            _activeRun = null;
+            StopButton.IsEnabled = false;
+            LoadButton.IsEnabled = RecordButton.IsEnabled = DryRunButton.IsEnabled = RunButton.IsEnabled = true;
+            SetState(RunState.Idle);
+            UpdateRunButtons();
         }
     }
 
-    private Task<WorkflowOutcome> HandleActAsync(JsonElement args, CancellationToken cancellationToken)
+    private void Stop_Click(object sender, RoutedEventArgs e)
     {
-        var goal = ReadString(args, "goal");
-        var path = ReadString(args, "export_path");
-        var constraints = args.TryGetProperty("constraints", out var values) && values.ValueKind == JsonValueKind.Array
-            ? values.EnumerateArray().Select(x => x.GetString()).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>().ToArray()
-            : [];
-        if (_interruptedTask)
-            return _workflow!.ReviseActAsync(goal, constraints, path, cancellationToken);
-        return _workflow!.ActAsync(goal, constraints, path, cancellationToken);
+        if (_recorder is not null) { StopRecording(); return; }
+        _activeRun?.Cancel();
     }
 
-    private async void ConfirmButton_Click(object sender, RoutedEventArgs e)
+    private void OpenTrace_Click(object sender, RoutedEventArgs e)
     {
-        if (_workflow is null || _pendingCallId is null || _pendingAction is null) return;
-        try
-        {
-            ConfirmationPanel.Visibility = Visibility.Collapsed;
-            if (_foregroundTracker?.RestoreIfPointPilotIsForeground() == false)
-                throw new InvalidOperationException("Return GIMP to the foreground before confirming.");
-            await Task.Delay(100);
-            var outcome = await _workflow.ConfirmAndExecuteAsync(_pendingAction, _pendingPath, CancellationToken.None);
-            ShowOutcome(outcome);
-            SendToolResult(_pendingCallId, outcome.Summary);
-            ClearPendingConfirmation();
-        }
-        catch (Exception exception)
-        {
-            var safe = exception is OpenAiIntegrationException integration ? integration.SafeError : ErrorMapper.Map(IntegrationFailure.Unknown);
-            ShowSafeError(safe);
-            SendToolResult(_pendingCallId, safe.WhatFailed + " " + safe.SafeNextStep);
-            ClearPendingConfirmation();
-        }
+        if (_traceDirectory is null || !Directory.Exists(_traceDirectory)) return;
+        using var process = Process.Start(new ProcessStartInfo("explorer.exe", $"\"{_traceDirectory}\"") { UseShellExecute = true });
     }
 
-    private void CancelConfirmation_Click(object sender, RoutedEventArgs e)
+    private void UpdateRunButtons() =>
+        DryRunButton.IsEnabled = RunButton.IsEnabled = _workflow is not null && _activeRun is null;
+
+    // ---- Diagnostics and shell ------------------------------------------------------------
+
+    private void ShowValidation(string message)
     {
-        if (_tasks.Snapshot.TaskId is not null) _tasks.Pause();
-        if (_state.CanTransition(PointPilotState.Paused)) _state.Transition(PointPilotState.Paused);
-        if (_state.Current == PointPilotState.Paused) _state.Transition(PointPilotState.Listening);
-        if (_pendingCallId is not null) SendToolResult(_pendingCallId, "The user declined the exact export. No export was authorized.");
-        ClearPendingConfirmation();
+        ValidationText.Text = message;
+        ValidationText.Visibility = Visibility.Visible;
+        StatusText.Text = "The workflow needs attention before it can run.";
+        _log.Write("validation_failed", new { length = message.Length });
     }
 
-    private void MuteButton_Click(object sender, RoutedEventArgs e)
+    private void ClearValidation()
     {
-        _muted = !_muted;
-        MuteButton.Content = _muted ? "_Unmute" : "_Mute";
-        PostWeb(new { type = "mute", muted = _muted });
-        TranscriptText.Text = _muted ? "Microphone muted." : "Listening…";
+        ValidationText.Visibility = Visibility.Collapsed;
+        ValidationText.Text = "";
     }
 
-    private void PauseButton_Click(object sender, RoutedEventArgs e) => PauseCurrentTask();
-    private void EndButton_Click(object sender, RoutedEventArgs e) => EndSession();
-
-    private void PauseCurrentTask()
-    {
-        _activeTool?.Cancel();
-        if (_tasks.Snapshot.TaskId is not null) _tasks.Pause();
-        PostWeb(new { type = "cancel_response" });
-        if (_pendingCallId is not null)
-            SendInterruptedToolResult(_pendingCallId, "The user stopped the pending operation. Its confirmation is invalidated.");
-        ClearPendingConfirmation();
-        _overlay.Hide();
-        if (_state.CanTransition(PointPilotState.Paused)) _state.Transition(PointPilotState.Paused);
-        TranscriptText.Text = "Paused. No further computer action will run until you resume.";
-    }
-
-    private void EndSession()
-    {
-        _activeTool?.Cancel();
-        if (_tasks.Snapshot.TaskId is not null) _tasks.Pause();
-        if (_sessionActive) PostWeb(new { type = "disconnect" });
-        _sessionActive = false;
-        _muted = false;
-        _interruptedTask = false;
-        _overlay.Hide();
-        _hotkeys?.SetEscapeEnabled(false);
-        if (_state.Current != PointPilotState.Idle)
-        {
-            if (_state.CanTransition(PointPilotState.Idle)) _state.Transition(PointPilotState.Idle);
-            else if (_state.CanTransition(PointPilotState.Paused)) { _state.Transition(PointPilotState.Paused); _state.Transition(PointPilotState.Idle); }
-        }
-        SessionButton.IsEnabled = true;
-        SessionButton.Content = "_Start listening";
-        MuteButton.IsEnabled = PauseButton.IsEnabled = EndButton.IsEnabled = false;
-        TranscriptText.Text = "Session ended. Start again when you want PointPilot nearby.";
-        ClearPendingConfirmation();
-    }
-
-    private void ShowOutcome(WorkflowOutcome outcome)
-    {
-        TranscriptText.Text = outcome.Summary;
-        if (outcome.Snapshot is not null)
-        {
-            ContextTitle.Text = string.IsNullOrWhiteSpace(outcome.Snapshot.Title) ? outcome.Snapshot.ProcessName : outcome.Snapshot.Title;
-            _overlay.ShowTarget(outcome.Snapshot, outcome.Target);
-        }
-    }
-
-    private void ShowConfirmation(WorkflowOutcome outcome)
-    {
-        ConfirmationDetails.Text = $"{outcome.ConfirmationAction}\nTarget: {outcome.TargetPath}\nThis confirms only this task revision and exact path. Existing data may be replaced.";
-        ConfirmationPanel.Visibility = Visibility.Visible;
-        ConfirmButton.Focus();
-    }
-
-    private void ClearPendingConfirmation()
-    {
-        _pendingCallId = _pendingAction = _pendingPath = null;
-        ConfirmationPanel.Visibility = Visibility.Collapsed;
-    }
-
-    private void RenderTranscript(JsonElement root)
-    {
-        var text = root.TryGetProperty("text", out var value) ? value.GetString() : null;
-        if (!string.IsNullOrWhiteSpace(text)) TranscriptText.Text = text;
-    }
-
-    private void RenderState(PointPilotState state)
+    private void SetState(RunState state)
     {
         StateText.Text = state.ToString();
-        StateDot.Fill = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(state switch
-        {
-            PointPilotState.Listening => "#12B76A",
-            PointPilotState.Acting or PointPilotState.Planning or PointPilotState.Verifying => "#2563EB",
-            PointPilotState.Error => "#D92D20",
-            PointPilotState.Paused => "#F79009",
-            _ => "#98A2B3"
-        }));
-        SessionButton.Content = state == PointPilotState.Paused ? "_Resume listening" : _sessionActive ? "_Listening" : "_Start listening";
-        SessionButton.IsEnabled = state is PointPilotState.Idle or PointPilotState.Paused or PointPilotState.Error;
-    }
-
-    private void EnableSessionControls()
-    {
-        MuteButton.IsEnabled = PauseButton.IsEnabled = EndButton.IsEnabled = true;
-        SessionButton.IsEnabled = false;
-    }
-
-    private void ShowSafeError(SafeError error)
-    {
-        _log.Write("safe_error", new { error.Failure, error.ActionMayHaveOccurred });
-        Dispatcher.InvokeAsync(() =>
-        {
-            ErrorText.Text = $"{error.WhatFailed} {error.SafeNextStep}";
-            ErrorText.Visibility = Visibility.Visible;
-            TranscriptText.Text = $"{error.WhatFailed}\n{error.UserInspection}\n{error.SafeNextStep}";
-            if (_state.Current != PointPilotState.Error && _state.CanTransition(PointPilotState.Error)) _state.Transition(PointPilotState.Error);
-        });
-    }
-
-    private void ClearError() => ErrorText.Visibility = Visibility.Collapsed;
-    private static string ReadString(JsonElement root, string name) => root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? string.Empty : string.Empty;
-
-    private void SendToolResult(string callId, string output) => PostWeb(new { type = "tool_result", callId, output = SecretRedactor.Redact(output) });
-    private void SendInterruptedToolResult(string callId, string output) => PostWeb(new { type = "tool_interrupted", callId, output = SecretRedactor.Redact(output) });
-    private void PostWeb(object value)
-    {
-        if (RealtimeWebView.CoreWebView2 is null) return;
-        RealtimeWebView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(value));
-    }
-
-    private void ResetSessionAfterFailure()
-    {
-        _sessionActive = false;
-        _hotkeys?.SetEscapeEnabled(false);
-        SessionButton.IsEnabled = true;
+        StateDot.Fill = new System.Windows.Media.SolidColorBrush(
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(state switch
+            {
+                RunState.Running => "#2563EB",
+                RunState.Completed => "#12B76A",
+                RunState.Failed => "#D92D20",
+                RunState.Cancelled => "#F79009",
+                _ => "#98A2B3"
+            }));
     }
 
     private Forms.NotifyIcon BuildTrayIcon()
     {
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("Open PointPilot", null, (_, _) => Dispatcher.Invoke(ShowWithoutStealingFocus));
-        menu.Items.Add("Start listening", null, (_, _) => Dispatcher.Invoke(async () => await StartSessionAsync()));
-        menu.Items.Add("End session", null, (_, _) => Dispatcher.Invoke(EndSession));
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Quit", null, (_, _) => Dispatcher.Invoke(Quit));
         var tray = new Forms.NotifyIcon
         {
-            Text = "PointPilot — voice-first desktop companion",
-            Icon = System.Drawing.SystemIcons.Information,
+            Text = "PointPilot — deterministic workflow runner",
+            Icon = System.Drawing.SystemIcons.Shield,
             Visible = true,
             ContextMenuStrip = menu
         };
@@ -434,33 +271,20 @@ public partial class MainWindow : Window
     {
         try
         {
-            _foregroundTracker = new ForegroundWindowTracker();
             _hotkeys = new GlobalHotkeyService(new WindowInteropHelper(this).Handle);
-            _hotkeys.ActivateRequested += async (_, _) =>
-            {
-                ShowWithoutStealingFocus();
-                if (!_sessionActive) await StartSessionAsync();
-            };
-            _hotkeys.StopRequested += (_, _) => PauseCurrentTask();
+            _hotkeys.StopRequested += (_, _) => Dispatcher.Invoke(() => { if (_activeRun is not null) _activeRun.Cancel(); });
+            _hotkeys.ActivateRequested += (_, _) => Dispatcher.Invoke(ShowWithoutStealingFocus);
         }
-        catch (Exception)
+        catch
         {
-            ErrorText.Text = "The default global hotkey is unavailable. Use the tray icon or Start listening button.";
-            ErrorText.Visibility = Visibility.Visible;
+            StatusText.Text = "Global hotkeys are unavailable (another app owns Ctrl+Alt+Space). The Stop button still cancels runs.";
         }
-    }
-
-    private void PositionCompanion()
-    {
-        Left = SystemParameters.WorkArea.Right - ActualWidth - 18;
-        Top = SystemParameters.WorkArea.Bottom - ActualHeight - 18;
     }
 
     private void ShowWithoutStealingFocus()
     {
         if (!IsVisible) Show();
-        PositionCompanion();
-        ShowWindow(new WindowInteropHelper(this).Handle, 4);
+        Activate();
     }
 
     private void Window_Closing(object? sender, CancelEventArgs e)
@@ -473,19 +297,13 @@ public partial class MainWindow : Window
     private void Quit()
     {
         _allowClose = true;
-        EndSession();
+        _activeRun?.Cancel();
+        _recorder?.Dispose();
         _hotkeys?.Dispose();
-        _foregroundTracker?.Dispose();
-        _executor?.Dispose();
-        _tasks.Dispose();
-        _activeTool?.Dispose();
-        _http.Dispose();
         _overlay.Close();
         _tray.Visible = false;
         _tray.Dispose();
         Close();
         System.Windows.Application.Current.Shutdown();
     }
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool ShowWindow(nint hWnd, int command);
 }

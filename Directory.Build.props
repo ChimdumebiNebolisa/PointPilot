@@ -7,7 +7,9 @@
     <Deterministic>true</Deterministic>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
+    <!-- The vulnerability audit performs an implicit restore without a RID, which cannot
+         match the win-x64-pinned lock files; it opts out via this environment flag. -->
+    <RestoreLockedMode Condition="'$(CI)' == 'true' And '$(PointPilotAllowUnlockedRestore)' != 'true'">true</RestoreLockedMode>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 </Project>

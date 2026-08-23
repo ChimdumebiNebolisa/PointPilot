@@ -1,50 +1,62 @@
 # PointPilot
 
-PointPilot is a general-purpose, voice-first Windows companion that can explain the live interface in front of you, point to relevant controls, guide one verified step at a time, and—when asked—operate a supported application through visible mouse and keyboard actions.
+PointPilot is a deterministic Windows desktop workflow automation and regression-testing tool. It records user interactions with native applications, converts them into a readable, versioned workflow specification, replays the workflow against the declared target application through stable Windows UI Automation selectors, verifies explicit postconditions, and produces a precise execution trace when anything fails.
 
-GIMP is the first verified actuation environment, not PointPilot’s product identity. The core coordinator, state machine, capture, policy, verification, Realtime voice host, and computer-action contracts are application-agnostic. This release keeps mutation allowlisted to foreground GIMP 3.x.
+It is a Playwright-like workflow system for native Windows desktop applications — with strong safety boundaries and deterministic verification.
+
+## Core principles
+
+1. **Deterministic execution.** The same workflow, compatible application state, and machine environment produce the same explicit control path.
+2. **Stable target identification.** UI Automation properties (automation ID, accessible name, class, control type) are preferred; raw coordinates are an explicit last resort that is always flagged weak.
+3. **Explicit verification.** Sending input is not success. Success requires declared postconditions: file existence, window state, control state/value, or exact image parity.
+4. **Safe scope.** A run binds to one declared process and top-level window; every mutating step re-verifies foreground identity before any input is sent.
+5. **Inspectable artifacts.** Workflows (YAML) and traces (JSON + human summary) are readable and versionable.
+6. **No hidden inference.** Ambiguous or missing targets fail closed with actionable diagnostics — never a guess.
+7. **Reproducible failure.** A failed run records which step failed, what was expected, what was observed, and what evidence was captured.
+
+No AI, LLMs, model providers, API keys, cloud services, or paid infrastructure are used anywhere in the runtime.
 
 ## What is implemented
 
-- Continuous OpenAI Realtime speech over WebRTC after one activation, with server VAD and barge-in.
-- Teach, Guide, Act, and Undo tools sharing one session.
-- Target-window capture and GPT-5.6 visual grounding.
-- Pointer overlay that does not move the real cursor and is excluded by target-HWND capture.
-- GPT-5.6 Computer Use action loop with visible Windows input.
-- Serialized atomic actions guarded by task ID, revision, cancellation, foreground handle/process, unchanged bounds, and coordinate checks.
-- Exact export confirmation bound to task revision, action, and path.
-- Screenshot-based verification plus expected-file existence checks before success language.
-- Global `Ctrl+Alt+Space`, tray controls, keyboard-accessible controls, and global Escape stop while a session is active.
-- Reproducible layered OpenRaster promotional-graphic fixture.
+- Versioned YAML workflow schema (`schemaVersion: 1`) with strict parsing and line-numbered diagnostics for malformed or ambiguous definitions.
+- Selector engine over Windows UI Automation: uniqueness checks, ambiguity detection, explicit `pick` for declared multiplicity, weakness flagging, fresh resolution before every action.
+- State-machine replay engine: validate → bind → per-step resolve/act/verify, serialized input, cancellation at every atomic boundary.
+- First-class assertions: file existence, window state, control existence/visibility/enabled/value, deterministic image parity against committed reference images.
+- Recorder producing draft workflows from real interaction (UIA invoke/focus events plus foreground-filtered keyboard capture), with weak selectors flagged for review.
+- Structured execution trace: JSON artifact plus concise human summary, including resolved-element records and diagnostic screenshots.
+- WPF app lifecycle: choose target → record/load → inspect → dry-run/run → results and trace folder.
+- CLI sharing the same parser and engine for local CI/scripted regression runs.
 
 ## Prerequisites
 
-- Windows 11 x64.
-- .NET 8 SDK (the installed bootstrap environment did not contain .NET 10; the code is intentionally compatible with the available supported LTS SDK).
-- Node.js 24+ for building the small local TypeScript Realtime surface.
-- Microsoft Edge WebView2 Runtime.
-- GIMP 3.2.4 for the pinned live-demo environment.
-- An OpenAI API project key with access to the configured Realtime, Responses, vision, transcription, and Computer Use models.
+- Windows 11 x64 (Windows 10 x64 works but is not verified).
+- .NET 8 SDK to build and test.
+- No other services, accounts, keys, or network access are required at runtime.
 
-## Build and run
+## Build and verify
 
 ```powershell
-Copy-Item .env.example .env.local
-# Edit .env.local and set OPENAI_API_KEY. Do not quote or commit it.
-npm ci
-npm run build:web
 dotnet restore PointPilot.sln --runtime win-x64 --locked-mode
-dotnet test PointPilot.sln --configuration Release
+dotnet build PointPilot.sln --configuration Release --no-restore
+dotnet test PointPilot.sln --configuration Release --no-restore
+dotnet format PointPilot.sln --verify-no-changes --no-restore --severity warn
+```
+
+Run the example end to end:
+
+```powershell
+notepad.exe   # start the target application first
+dotnet run --project src/PointPilot.Cli/PointPilot.Cli.csproj --configuration Release --no-restore -- validate examples/notepad-demo.yaml
+dotnet run --project src/PointPilot.Cli/PointPilot.Cli.csproj --configuration Release --no-restore -- run examples/notepad-demo.yaml --out traces/demo
+```
+
+Exit codes: 0 completed, 2 invalid workflow, 3 run failed, 4 cancelled, 1 usage error.
+
+Desktop app:
+
+```powershell
 dotnet run --project src/PointPilot.App/PointPilot.App.csproj --configuration Release
 ```
-
-Generate the fixture before a demo:
-
-```powershell
-& .\tools\generate-demo-fixture.ps1
-```
-
-Open `fixtures/pointpilot-promotional-graphic.ora` in GIMP, keep GIMP foreground, and start PointPilot with `Ctrl+Alt+Space`. The long-lived API key stays in the .NET host. WebView2 receives only a short-lived Realtime client secret in memory.
 
 ## Package
 
@@ -52,17 +64,11 @@ Open `fixtures/pointpilot-promotional-graphic.ora` in GIMP, keep GIMP foreground
 & .\scripts\package.ps1
 ```
 
-This produces a self-contained Windows x64 zip under `artifacts/`. WebView2 Runtime and GIMP remain declared machine prerequisites.
+Produces a self-contained Windows x64 zip under `artifacts/`.
 
-## Scope and evidence
+## Documentation
 
-Start with [product scope](docs/product-scope.md), [architecture](docs/architecture.md), [pinned demo environment](docs/demo-environment.md), [demo script](docs/demo-script.md), [security and privacy](docs/security-and-privacy.md), and [testing](docs/testing.md). The authoritative requirements remain in `PointPilot_PRD.md`; acceptance traceability is in `specs/001-pointpilot/`.
-
-All repository implementation files are new Build Week work. No pre-existing product source was present in the cloned repository. Project-local third-party skill instructions are provenance-pinned in `.agent/skills.lock`; they are development guidance, not runtime code.
-
-## Honest verification boundary
-
-Automated tests and local build/package checks are reproducible without GIMP. Live AC-10 and AC-20 require the pinned GIMP build, microphone, model access, and three consecutive operator runs. A run is not counted when a prerequisite fails before PointPilot begins acting. See `docs/live-test-checklist.md` for the exact evidence form.
+Start with [workflow format](docs/workflow-format.md), [selector semantics](docs/selectors.md), [architecture](docs/architecture.md), [safety model](docs/safety-model.md), [testing](docs/testing.md), and the [migration note](docs/migration-model-removal.md) explaining removal of the earlier model-driven runtime. Historical Build Week artifacts remain under `specs/001-pointpilot/`.
 
 ## License
 
