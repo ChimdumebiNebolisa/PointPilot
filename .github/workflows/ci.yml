@@ -22,7 +22,9 @@ jobs:
       - name: CLI smoke - example workflow must validate
         run: dotnet run --project src/PointPilot.Cli/PointPilot.Cli.csproj --configuration Release --no-restore -- validate examples/notepad-demo.yaml
       - run: dotnet publish src/PointPilot.App/PointPilot.App.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/win-x64
-      - run: dotnet list PointPilot.sln package --vulnerable --include-transitive
+      # Evaluate against the same RID as the committed lock files; otherwise this
+      # implicit restore drops the runtime identifier and fails locked mode (NU1004).
+      - run: dotnet list PointPilot.sln package --vulnerable --include-transitive --runtime win-x64
       - uses: actions/upload-artifact@v4
         with:
           name: PointPilot-win-x64
